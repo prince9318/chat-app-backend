@@ -12,10 +12,14 @@ const messageSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    audio: { type: String }, // ✅ new field for audio file URL
+    messageType: { type: String, default: "text" }, // 'text' | 'call'
+    callType: { type: String }, // 'audio' | 'video' (when messageType === 'call')
+    callStatus: { type: String }, // 'answered' | 'missed' (when messageType === 'call')
+    callDuration: { type: Number, default: 0 }, // seconds (when messageType === 'call')
+    audio: { type: String },
     text: { type: String },
     image: { type: String },
-    video: { type: String }, // ✅ new field for video file URL
+    video: { type: String },
     seen: { type: Boolean, default: false },
     // 👇 Add soft delete field
     isDeleted: { type: Boolean, default: false },

@@ -42,7 +42,7 @@ export const getMessages = async (req, res) => {
         { senderId: myId, receiverId: selectedUserId },
         { senderId: selectedUserId, receiverId: myId },
       ],
-    });
+    }).sort({ createdAt: 1 });
     await Message.updateMany(
       { senderId: selectedUserId, receiverId: myId },
       { seen: true }
@@ -120,6 +120,44 @@ export const deleteMessage = async (req, res) => {
     }
   } catch (error) {
     console.log(error.message);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// Save call log (visible to both users in chat)
+export const saveCallLog = async (req, res) => {
+  try {
+    const myId = req.user._id;
+    const { otherUserId, callType, callStatus, callDuration, wasCaller } = req.body;
+
+    if (!otherUserId || !callType || !callStatus) {
+      return res.status(400).json({
+        success: false,
+        message: "otherUserId, callType and callStatus are required",
+      });
+    }
+
+    const senderId = wasCaller ? myId : otherUserId;
+    const receiverId = wasCaller ? otherUserId : myId;
+
+    const newMessage = await Message.create({
+      senderId,
+      receiverId,
+      messageType: "call",
+      callType: callType === "video" ? "video" : "audio",
+      callStatus: callStatus === "answered" ? "answered" : "missed",
+      callDuration: Math.max(0, Number(callDuration) || 0),
+      seen: true,
+    });
+
+    const receiverSocketId = userSocketMap[receiverId.toString()];
+    if (receiverSocketId && io) {
+      io.to(receiverSocketId).emit("newMessage", newMessage);
+    }
+
+    res.json({ success: true, newMessage });
+  } catch (error) {
+    console.error(error.message);
     res.json({ success: false, message: error.message });
   }
 };
