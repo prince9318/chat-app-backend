@@ -150,9 +150,12 @@ export const saveCallLog = async (req, res) => {
       seen: true,
     });
 
-    const receiverSocketId = userSocketMap[receiverId.toString()];
-    if (receiverSocketId && io) {
-      io.to(receiverSocketId).emit("newMessage", newMessage);
+    // Emit only to the OTHER user (who didn't create this log) so they get it in real time.
+    // The requester already gets the message from the API response and addCallLogMessage.
+    const recipientUserId = senderId.toString() === myId.toString() ? receiverId : senderId;
+    const otherSocketId = userSocketMap[recipientUserId.toString()];
+    if (otherSocketId && io) {
+      io.to(otherSocketId).emit("newMessage", newMessage);
     }
 
     res.json({ success: true, newMessage });
