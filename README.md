@@ -4,14 +4,16 @@ A real-time chat application built with the MERN stack (MongoDB, Express.js, Rea
 
 ## 🌟 Features
 
-- **Real-time Messaging**: Instant message delivery using Socket.io
+- **Real-time Messaging**: Instant message delivery using Socket.io for text, images, audio, and video
+- **Voice and Video Calling**: Real-time voice and video calls with call status tracking (answered, missed, duration)
 - **User Authentication**: Secure JWT-based authentication system
-- **Image Sharing**: Upload and share images via Cloudinary integration
+- **Multimedia Sharing**: Upload and share images, audio, and video via Cloudinary integration
 - **Online Status**: See when users are online/offline in real-time
 - **Message Read Receipts**: Know when your messages have been seen
-- **User Profiles**: Customizable profiles with bios and profile pictures
+- **Message Deletion**: Delete messages for yourself or for everyone
+- **User Profiles**: Customizable profiles with bios, names, and profile pictures
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
-- **Secure**: Password hashing with bcrypt and protected routes
+- **Secure**: Password hashing with bcrypt, protected routes, rate limiting, and CORS
 
 ## 🛠️ Tech Stack
 
