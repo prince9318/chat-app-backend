@@ -35,6 +35,38 @@ io.on("connection", (socket) => {
     emitOnlineUsers();
   }
 
+  // ---- Call signaling (audio/video) ----
+  socket.on("call:request", ({ to, type, callerName }) => {
+    const toSocketId = userSocketMap[to];
+    if (toSocketId) {
+      io.to(toSocketId).emit("call:incoming", {
+        from: userId,
+        type: type || "video",
+        callerName: callerName || "Someone",
+      });
+    }
+  });
+
+  socket.on("call:accept", ({ to }) => {
+    const toSocketId = userSocketMap[to];
+    if (toSocketId) io.to(toSocketId).emit("call:accepted", { from: userId });
+  });
+
+  socket.on("call:reject", ({ to }) => {
+    const toSocketId = userSocketMap[to];
+    if (toSocketId) io.to(toSocketId).emit("call:rejected");
+  });
+
+  socket.on("call:end", ({ to }) => {
+    const toSocketId = userSocketMap[to];
+    if (toSocketId) io.to(toSocketId).emit("call:ended");
+  });
+
+  socket.on("webrtc:signal", ({ to, signal }) => {
+    const toSocketId = userSocketMap[to];
+    if (toSocketId) io.to(toSocketId).emit("webrtc:signal", { from: userId, signal });
+  });
+
   socket.on("disconnect", () => {
     if (userId) {
       delete userSocketMap[userId];
