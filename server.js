@@ -96,7 +96,10 @@ app.use(express.static("client/build"));
 // Connect to MongoDB
 await connectDB();
 
-if (process.env.NODE_ENV !== "production") {
+const isVercelRuntime =
+  process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV);
+
+if (!isVercelRuntime) {
   const PORT = process.env.PORT || 5000;
   server.listen(PORT, () =>
     console.log("🚀 Server is running on PORT: " + PORT)

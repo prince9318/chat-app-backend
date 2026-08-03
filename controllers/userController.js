@@ -5,6 +5,13 @@ import cloudinary from "../lib/cloudinary.js";
 import crypto from "crypto";
 import { canSendMail, sendPasswordResetEmail } from "../lib/mailer.js";
 
+const isLocalUrl = (value = "") =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(String(value).trim());
+
+const canExposeResetUrl = (frontendBase) =>
+  process.env.ALLOW_RESET_LINK_FALLBACK === "true" ||
+  (process.env.NODE_ENV !== "production" && isLocalUrl(frontendBase));
+
 // Signup a new user
 export const signup = async (req, res) => {
   const { fullName, email, password, bio } = req.body;
@@ -139,6 +146,7 @@ export const forgotPassword = async (req, res) => {
     const resetUrl = `${String(frontendBase).replace(/\/$/, "")}/reset-password?token=${resetToken}&email=${encodeURIComponent(
       email
     )}`;
+    const allowResetUrlFallback = canExposeResetUrl(frontendBase);
 
     if (canSendMail()) {
       try {
@@ -150,11 +158,11 @@ export const forgotPassword = async (req, res) => {
       } catch (mailError) {
         console.log("Password reset email failed:", mailError.message);
 
-        if (process.env.NODE_ENV !== "production") {
+        if (allowResetUrlFallback) {
           return res.json({
             success: true,
             message:
-              "Email service timed out. SMTP may be unreachable, so a reset link is shown below for testing.",
+              "Email service is unavailable, so a reset link is shown below for local testing.",
             resetUrl,
           });
         }
@@ -167,12 +175,19 @@ export const forgotPassword = async (req, res) => {
       }
     }
 
-    // Dev fallback (no SMTP): return the reset URL for local testing
+    if (allowResetUrlFallback) {
+      return res.json({
+        success: true,
+        message:
+          "Password reset link generated (email provider not configured). Use the provided URL to reset.",
+        resetUrl,
+      });
+    }
+
     return res.json({
-      success: true,
+      success: false,
       message:
-        "Password reset link generated (SMTP not configured). Use the provided URL to reset.",
-      resetUrl,
+        "Password reset email is not configured on the server. Please contact support.",
     });
   } catch (error) {
     console.log(error.message);
