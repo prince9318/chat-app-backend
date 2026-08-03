@@ -141,11 +141,30 @@ export const forgotPassword = async (req, res) => {
     )}`;
 
     if (canSendMail()) {
-      await sendPasswordResetEmail({ to: email, resetUrl });
-      return res.json({
-        success: true,
-        message: "If an account exists for that email, a reset link was sent.",
-      });
+      try {
+        await sendPasswordResetEmail({ to: email, resetUrl });
+        return res.json({
+          success: true,
+          message: "If an account exists for that email, a reset link was sent.",
+        });
+      } catch (mailError) {
+        console.log("Password reset email failed:", mailError.message);
+
+        if (process.env.NODE_ENV !== "production") {
+          return res.json({
+            success: true,
+            message:
+              "Email service timed out. SMTP may be unreachable, so a reset link is shown below for testing.",
+            resetUrl,
+          });
+        }
+
+        return res.json({
+          success: false,
+          message:
+            "We could not send the reset email right now. Please try again in a moment.",
+        });
+      }
     }
 
     // Dev fallback (no SMTP): return the reset URL for local testing
