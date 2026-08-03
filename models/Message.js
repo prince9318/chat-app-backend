@@ -12,7 +12,7 @@ const messageSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    messageType: { type: String, default: "text" }, // 'text' | 'call'
+    messageType: { type: String, default: "text" }, // 'text' | 'call' | 'file'
     callType: { type: String }, // 'audio' | 'video' (when messageType === 'call')
     callStatus: { type: String }, // 'answered' | 'missed' (when messageType === 'call')
     callDuration: { type: Number, default: 0 }, // seconds (when messageType === 'call')
@@ -20,6 +20,13 @@ const messageSchema = new mongoose.Schema(
     text: { type: String },
     image: { type: String },
     video: { type: String },
+    file: {
+      url: { type: String },
+      name: { type: String },
+      mimeType: { type: String },
+      size: { type: Number },
+      extension: { type: String },
+    },
     seen: { type: Boolean, default: false },
     // 👇 Add soft delete field
     isDeleted: { type: Boolean, default: false },

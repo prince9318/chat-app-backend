@@ -2,6 +2,94 @@ import Message from "../models/Message.js";
 import User from "../models/User.js";
 import { io, userSocketMap } from "../server.js";
 import cloudinary from "../lib/cloudinary.js";
+import { Readable } from "stream";
+
+const sanitizeFileName = (fileName = "attachment") =>
+  String(fileName)
+    .replace(/[^\w.\-() ]+/g, "_")
+    .trim()
+    .slice(0, 120) || "attachment";
+
+const getFileExtension = (fileName = "") => {
+  const safeName = String(fileName).trim();
+  const lastDotIndex = safeName.lastIndexOf(".");
+  if (lastDotIndex <= 0 || lastDotIndex === safeName.length - 1) return "";
+  return safeName.slice(lastDotIndex + 1).toLowerCase();
+};
+
+const getAttachmentKind = (mimeType = "") => {
+  const normalizedMimeType = String(mimeType).toLowerCase();
+
+  if (normalizedMimeType.startsWith("image/")) return "image";
+  if (normalizedMimeType.startsWith("video/")) return "video";
+  if (normalizedMimeType.startsWith("audio/")) return "audio";
+
+  return "file";
+};
+
+const uploadBufferToCloudinary = (file, options) =>
+  new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      options,
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+
+    Readable.from(file.buffer).pipe(uploadStream);
+  });
+
+const uploadAttachmentFile = async (file) => {
+  const kind = getAttachmentKind(file?.mimetype);
+  const safeName = sanitizeFileName(file?.originalname || "attachment");
+
+  if (kind === "image") {
+    const uploadResponse = await uploadBufferToCloudinary(file, {
+      resource_type: "image",
+      folder: "chat-app/images",
+    });
+
+    return { kind, imageUrl: uploadResponse.secure_url };
+  }
+
+  if (kind === "video") {
+    const uploadResponse = await uploadBufferToCloudinary(file, {
+      resource_type: "video",
+      folder: "chat-app/videos",
+    });
+
+    return { kind, videoUrl: uploadResponse.secure_url };
+  }
+
+  if (kind === "audio") {
+    const uploadResponse = await uploadBufferToCloudinary(file, {
+      resource_type: "video",
+      folder: "chat-app/audio",
+    });
+
+    return { kind, audioUrl: uploadResponse.secure_url };
+  }
+
+  const uploadResponse = await uploadBufferToCloudinary(file, {
+    resource_type: "raw",
+    folder: "chat-app/files",
+    use_filename: true,
+    unique_filename: true,
+    filename_override: safeName,
+  });
+
+  return {
+    kind,
+    fileData: {
+      url: uploadResponse.secure_url,
+      name: safeName,
+      mimeType: String(file?.mimetype || "application/octet-stream"),
+      size: Number(file?.size) || 0,
+      extension: getFileExtension(file?.originalname),
+    },
+  };
+};
 
 // Get all users except the logged in user
 export const getUsersForSidebar = async (req, res) => {
@@ -168,9 +256,25 @@ export const saveCallLog = async (req, res) => {
 // Send message to selected user
 export const sendMessage = async (req, res) => {
   try {
-    const { text, image, audio, video } = req.body;
+    const { text, image, audio, video, file } = req.body;
     const receiverId = req.params.id;
     const senderId = req.user._id;
+    const attachment = req.file;
+    const trimmedText = String(text || "").trim();
+
+    if (
+      !trimmedText &&
+      !image &&
+      !audio &&
+      !video &&
+      !file?.dataUrl &&
+      !attachment
+    ) {
+      return res.json({
+        success: false,
+        message: "Message content is required",
+      });
+    }
 
     let imageUrl;
     if (image) {
@@ -195,13 +299,45 @@ export const sendMessage = async (req, res) => {
       videoUrl = uploadResponse.secure_url;
     }
 
+    let fileData;
+    if (file?.dataUrl) {
+      const uploadResponse = await cloudinary.uploader.upload(file.dataUrl, {
+        resource_type: "raw",
+        folder: "chat-app/files",
+        use_filename: true,
+        unique_filename: true,
+        filename_override: sanitizeFileName(file.name),
+      });
+
+      fileData = {
+        url: uploadResponse.secure_url,
+        name: sanitizeFileName(file.name),
+        mimeType: String(file.type || uploadResponse.format || "application/octet-stream"),
+        size: Number(file.size) || 0,
+        extension: getFileExtension(file.name),
+      };
+    }
+
+    if (attachment) {
+      const uploadedAttachment = await uploadAttachmentFile(attachment);
+
+      imageUrl = uploadedAttachment.imageUrl || imageUrl;
+      audioUrl = uploadedAttachment.audioUrl || audioUrl;
+      videoUrl = uploadedAttachment.videoUrl || videoUrl;
+      fileData = uploadedAttachment.fileData || fileData;
+    }
+
+    const messageType = fileData ? "file" : "text";
+
     const newMessage = await Message.create({
       senderId,
       receiverId,
-      text,
+      messageType,
+      text: trimmedText,
       image: imageUrl,
       audio: audioUrl,
       video: videoUrl,
+      file: fileData,
     });
 
     // Emit the new message to the receiver's socket

@@ -11,6 +11,7 @@ import {
 } from "../controllers/messageController.js";
 import Message from "../models/Message.js";
 import { uploadAudio } from "../middlewares/uploadAudio.js";
+import { uploadAttachment } from "../middlewares/uploadAttachment.js";
 import { io } from "../server.js";
 
 const messageRouter = express.Router();
@@ -18,7 +19,12 @@ const messageRouter = express.Router();
 messageRouter.get("/users", protectRoute, getUsersForSidebar);
 messageRouter.get("/:id", protectRoute, getMessages);
 messageRouter.put("/mark/:id", protectRoute, markMessageAsSeen);
-messageRouter.post("/send/:id", protectRoute, sendMessage);
+messageRouter.post(
+  "/send/:id",
+  protectRoute,
+  uploadAttachment.single("attachment"),
+  sendMessage
+);
 messageRouter.post("/call-log", protectRoute, saveCallLog);
 messageRouter.delete("/delete/:messageId", protectRoute, deleteMessage);
 

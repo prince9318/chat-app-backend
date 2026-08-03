@@ -3,7 +3,11 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import cloudinary from "../lib/cloudinary.js";
 import crypto from "crypto";
-import { canSendMail, sendPasswordResetEmail } from "../lib/mailer.js";
+import {
+  canSendMail,
+  getMailProvider,
+  sendPasswordResetEmail,
+} from "../lib/mailer.js";
 
 const isLocalUrl = (value = "") =>
   /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(String(value).trim());
@@ -156,7 +160,16 @@ export const forgotPassword = async (req, res) => {
           message: "If an account exists for that email, a reset link was sent.",
         });
       } catch (mailError) {
-        console.log("Password reset email failed:", mailError.message);
+        console.error("Password reset email failed", {
+          provider: mailError?.mailProvider || getMailProvider(),
+          message: mailError?.message,
+          code: mailError?.smtpCode || mailError?.code || null,
+          command: mailError?.smtpCommand || null,
+          response: mailError?.smtpResponse || null,
+          httpStatus: mailError?.httpStatus || null,
+          frontendBase,
+          email,
+        });
 
         if (allowResetUrlFallback) {
           return res.json({
