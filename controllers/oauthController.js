@@ -8,16 +8,16 @@ import {
   issueOAuthToken,
 } from "../lib/oauth.js";
 
-const googleConfig = () => ({
+const googleConfig = (req) => ({
   clientId: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  redirectUri: `${getBackendUrl()}/api/auth/google/callback`,
+  redirectUri: `${getBackendUrl(req)}/api/auth/google/callback`,
 });
 
-const githubConfig = () => ({
+const githubConfig = (req) => ({
   clientId: process.env.GITHUB_CLIENT_ID,
   clientSecret: process.env.GITHUB_CLIENT_SECRET,
-  redirectUri: `${getBackendUrl()}/api/auth/github/callback`,
+  redirectUri: `${getBackendUrl(req)}/api/auth/github/callback`,
 });
 
 const isConfigured = (config) =>
@@ -26,7 +26,7 @@ const isConfigured = (config) =>
 // ---- Google OAuth ----
 
 export const googleAuth = (req, res) => {
-  const config = googleConfig();
+  const config = googleConfig(req);
   if (!isConfigured(config)) {
     return res.status(503).json({
       success: false,
@@ -48,8 +48,15 @@ export const googleAuth = (req, res) => {
 };
 
 export const googleCallback = async (req, res) => {
-  const config = googleConfig();
+  const config = googleConfig(req);
   const { code, state, error } = req.query;
+
+  if (!isConfigured(config)) {
+    return redirectWithError(
+      res,
+      "Google sign-in is not configured on the server.",
+    );
+  }
 
   if (error) {
     return redirectWithError(res, "Google sign-in was cancelled.");
@@ -108,7 +115,7 @@ export const googleCallback = async (req, res) => {
 // ---- GitHub OAuth ----
 
 export const githubAuth = (req, res) => {
-  const config = githubConfig();
+  const config = githubConfig(req);
   if (!isConfigured(config)) {
     return res.status(503).json({
       success: false,
@@ -128,8 +135,15 @@ export const githubAuth = (req, res) => {
 };
 
 export const githubCallback = async (req, res) => {
-  const config = githubConfig();
+  const config = githubConfig(req);
   const { code, state, error } = req.query;
+
+  if (!isConfigured(config)) {
+    return redirectWithError(
+      res,
+      "GitHub sign-in is not configured on the server.",
+    );
+  }
 
   if (error) {
     return redirectWithError(res, "GitHub sign-in was cancelled.");
