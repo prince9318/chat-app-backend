@@ -38,6 +38,7 @@ export const signup = async (req, res) => {
       email,
       password: hashedPassword,
       bio,
+      authProvider: "local",
     });
 
     const token = generateToken(newUser._id);
@@ -64,6 +65,22 @@ export const login = async (req, res) => {
       return res.json({
         success: false,
         message: "Invalid email or password",
+      });
+    }
+
+    if (userData.authProvider !== "local") {
+      const providerLabel =
+        userData.authProvider === "google" ? "Google" : "GitHub";
+      return res.json({
+        success: false,
+        message: `This account uses ${providerLabel} sign-in. Please continue with ${providerLabel}.`,
+      });
+    }
+
+    if (!userData.password) {
+      return res.json({
+        success: false,
+        message: "Please sign in with your linked social account.",
       });
     }
 

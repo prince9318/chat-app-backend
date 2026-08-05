@@ -4,6 +4,7 @@ import cors from "cors";
 import http from "http";
 import { connectDB } from "./lib/db.js";
 import userRouter from "./routes/userRoutes.js";
+import oauthRouter from "./routes/oauthRoutes.js";
 import messageRouter from "./routes/messageRoutes.js";
 import { Server } from "socket.io";
 import path from "path";
@@ -88,6 +89,7 @@ app.get("/", (req, res) => {
 // Routes setup
 app.use("/api/status", (req, res) => res.send("Server is live"));
 app.use("/api/auth", userRouter);
+app.use("/api/auth", oauthRouter);
 app.use("/api/messages", messageRouter);
 
 // Serve static files (if self-hosted, not Vercel)
