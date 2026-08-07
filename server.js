@@ -14,9 +14,13 @@ const app = express();
 const server = http.createServer(app);
 
 // Initialize socket.io server
+const socketOrigins = process.env.SOCKET_ORIGINS
+  ? process.env.SOCKET_ORIGINS.split(",").map((origin) => origin.trim())
+  : true;
+
 export const io = new Server(server, {
   cors: {
-    origin: "https://chat-app-ud16.vercel.app/login",
+    origin: socketOrigins,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   },
@@ -65,7 +69,8 @@ io.on("connection", (socket) => {
 
   socket.on("webrtc:signal", ({ to, signal }) => {
     const toSocketId = userSocketMap[to];
-    if (toSocketId) io.to(toSocketId).emit("webrtc:signal", { from: userId, signal });
+    if (toSocketId)
+      io.to(toSocketId).emit("webrtc:signal", { from: userId, signal });
   });
 
   socket.on("disconnect", () => {
@@ -104,7 +109,7 @@ const isVercelRuntime =
 if (!isVercelRuntime) {
   const PORT = process.env.PORT || 5000;
   server.listen(PORT, () =>
-    console.log("🚀 Server is running on PORT: " + PORT)
+    console.log("🚀 Server is running on PORT: " + PORT),
   );
 }
 

@@ -34,7 +34,7 @@ const uploadBufferToCloudinary = (file, options) =>
       (error, result) => {
         if (error) return reject(error);
         resolve(result);
-      }
+      },
     );
 
     Readable.from(file.buffer).pipe(uploadStream);
@@ -64,8 +64,11 @@ const uploadAttachmentFile = async (file) => {
 
   if (kind === "audio") {
     const uploadResponse = await uploadBufferToCloudinary(file, {
-      resource_type: "video",
+      resource_type: "auto",
       folder: "chat-app/audio",
+      use_filename: true,
+      unique_filename: true,
+      filename_override: safeName,
     });
 
     return { kind, audioUrl: uploadResponse.secure_url };
@@ -79,10 +82,19 @@ const uploadAttachmentFile = async (file) => {
     filename_override: safeName,
   });
 
+  const previewUrl = cloudinary.url(uploadResponse.public_id, {
+    resource_type: uploadResponse.resource_type,
+    type: "upload",
+    sign_url: true,
+    secure: true,
+  });
+
   return {
     kind,
     fileData: {
-      url: uploadResponse.secure_url,
+      url: previewUrl,
+      publicId: uploadResponse.public_id,
+      resourceType: uploadResponse.resource_type,
       name: safeName,
       mimeType: String(file?.mimetype || "application/octet-stream"),
       size: Number(file?.size) || 0,
@@ -96,7 +108,7 @@ export const getUsersForSidebar = async (req, res) => {
   try {
     const userId = req.user._id;
     const filteredUsers = await User.find({ _id: { $ne: userId } }).select(
-      "-password"
+      "-password",
     );
 
     // Count number of messages not seen
@@ -131,12 +143,37 @@ export const getMessages = async (req, res) => {
         { senderId: selectedUserId, receiverId: myId },
       ],
     }).sort({ createdAt: 1 });
-    await Message.updateMany(
-      { senderId: selectedUserId, receiverId: myId },
-      { seen: true }
-    );
 
-    res.json({ success: true, messages });
+    const unseenMessages = await Message.find({
+      senderId: selectedUserId,
+      receiverId: myId,
+      seen: false,
+    }).select("_id");
+    const messageIds = unseenMessages.map((msg) => msg._id.toString());
+
+    if (messageIds.length > 0) {
+      await Message.updateMany(
+        { senderId: selectedUserId, receiverId: myId, seen: false },
+        { seen: true },
+      );
+    }
+
+    const senderSocketId = userSocketMap[selectedUserId.toString()];
+    if (senderSocketId && messageIds.length > 0) {
+      io.to(senderSocketId).emit("messagesSeen", { messageIds });
+    }
+
+    const normalizedMessages = messages.map((msg) => {
+      if (
+        msg.senderId.toString() === selectedUserId.toString() &&
+        msg.receiverId.toString() === myId.toString()
+      ) {
+        return { ...msg.toObject(), seen: true };
+      }
+      return msg;
+    });
+
+    res.json({ success: true, messages: normalizedMessages });
   } catch (error) {
     console.log(error.message);
     res.json({ success: false, message: error.message });
@@ -147,7 +184,21 @@ export const getMessages = async (req, res) => {
 export const markMessageAsSeen = async (req, res) => {
   try {
     const { id } = req.params;
-    await Message.findByIdAndUpdate(id, { seen: true });
+    const message = await Message.findByIdAndUpdate(
+      id,
+      { seen: true },
+      { new: true },
+    );
+    if (!message) {
+      return res.json({ success: false, message: "Message not found" });
+    }
+
+    const targetUserId = message.senderId.toString();
+    const senderSocketId = userSocketMap[targetUserId];
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("messageSeen", { messageId: id });
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.log(error.message);
@@ -216,7 +267,8 @@ export const deleteMessage = async (req, res) => {
 export const saveCallLog = async (req, res) => {
   try {
     const myId = req.user._id;
-    const { otherUserId, callType, callStatus, callDuration, wasCaller } = req.body;
+    const { otherUserId, callType, callStatus, callDuration, wasCaller } =
+      req.body;
 
     if (!otherUserId || !callType || !callStatus) {
       return res.status(400).json({
@@ -240,7 +292,8 @@ export const saveCallLog = async (req, res) => {
 
     // Emit only to the OTHER user (who didn't create this log) so they get it in real time.
     // The requester already gets the message from the API response and addCallLogMessage.
-    const recipientUserId = senderId.toString() === myId.toString() ? receiverId : senderId;
+    const recipientUserId =
+      senderId.toString() === myId.toString() ? receiverId : senderId;
     const otherSocketId = userSocketMap[recipientUserId.toString()];
     if (otherSocketId && io) {
       io.to(otherSocketId).emit("newMessage", newMessage);
@@ -309,10 +362,21 @@ export const sendMessage = async (req, res) => {
         filename_override: sanitizeFileName(file.name),
       });
 
+      const previewUrl = cloudinary.url(uploadResponse.public_id, {
+        resource_type: uploadResponse.resource_type,
+        type: "upload",
+        sign_url: true,
+        secure: true,
+      });
+
       fileData = {
-        url: uploadResponse.secure_url,
+        url: previewUrl,
+        publicId: uploadResponse.public_id,
+        resourceType: uploadResponse.resource_type,
         name: sanitizeFileName(file.name),
-        mimeType: String(file.type || uploadResponse.format || "application/octet-stream"),
+        mimeType: String(
+          file.type || uploadResponse.format || "application/octet-stream",
+        ),
         size: Number(file.size) || 0,
         extension: getFileExtension(file.name),
       };
