@@ -21,6 +21,11 @@ const userSchema = new mongoose.Schema(
     bio: { type: String },
     resetPasswordTokenHash: { type: String },
     resetPasswordExpiresAt: { type: Date },
+    emailVerified: { type: Boolean, default: false },
+    verificationOTPHash: { type: String },
+    verificationOTPExpiresAt: { type: Date },
+    verificationTokenHash: { type: String },
+    verificationTokenExpiresAt: { type: Date },
   },
   { timestamps: true }
 );
