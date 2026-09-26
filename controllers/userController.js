@@ -15,11 +15,11 @@ const isLocalUrl = (value = "") =>
 
 const canExposeResetUrl = (frontendBase) =>
   process.env.ALLOW_RESET_LINK_FALLBACK === "true" ||
-  (process.env.NODE_ENV !== "production" && isLocalUrl(frontendBase));
+  process.env.NODE_ENV !== "production";
 
 const canExposeVerificationUrl = (frontendBase) =>
   process.env.ALLOW_VERIFICATION_LINK_FALLBACK === "true" ||
-  (process.env.NODE_ENV !== "production" && isLocalUrl(frontendBase));
+  process.env.NODE_ENV !== "production";
 
 const generateOTP = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
@@ -48,8 +48,8 @@ const sendVerificationToUser = async ({ user, frontendBase }) => {
     user.email
   )}`;
 
-  const allowVerificationUrlFallback = canExposeVerificationUrl(frontendBase);
-  const exposeOTP = process.env.NODE_ENV !== "production" && allowVerificationUrlFallback;
+  const alwaysExposeFallback = process.env.ALLOW_VERIFICATION_LINK_FALLBACK === "true";
+  const mailProvider = getMailProvider();
 
   if (canSendMail()) {
     try {
@@ -62,25 +62,35 @@ const sendVerificationToUser = async ({ user, frontendBase }) => {
       return {
         emailSent: true,
         email: user.email,
-        devOtp: exposeOTP ? otp : undefined,
-        devVerifyUrl: allowVerificationUrlFallback ? verifyUrl : undefined,
+        mailProvider,
+        otp: alwaysExposeFallback ? otp : undefined,
+        verifyUrl: alwaysExposeFallback ? verifyUrl : undefined,
       };
     } catch (mailError) {
+      const provider = mailError?.mailProvider || mailProvider;
+      const errorMessage =
+        mailError?.smtpResponse ||
+        mailError?.message ||
+        "Unknown email delivery error";
+
       console.error("Verification email failed", {
-        provider: mailError?.mailProvider || getMailProvider(),
+        provider,
         message: mailError?.message,
         code: mailError?.smtpCode || mailError?.code || null,
         response: mailError?.smtpResponse || null,
         httpStatus: mailError?.httpStatus || null,
         email: user.email,
       });
+
       return {
         emailSent: false,
         email: user.email,
-        devOtp: allowVerificationUrlFallback ? otp : undefined,
-        devVerifyUrl: allowVerificationUrlFallback ? verifyUrl : undefined,
-        mailError:
-          "We could not send the verification email right now. Please try resending.",
+        mailProvider: provider,
+        mailError: errorMessage,
+        userFacingMailError:
+          "We couldn't deliver the email right now. Gmail SMTP is often blocked by cloud providers like Render. Use the OTP / verification link shown below instead.",
+        otp,
+        verifyUrl,
       };
     }
   }
@@ -88,10 +98,12 @@ const sendVerificationToUser = async ({ user, frontendBase }) => {
   return {
     emailSent: false,
     email: user.email,
-    devOtp: allowVerificationUrlFallback ? otp : undefined,
-    devVerifyUrl: allowVerificationUrlFallback ? verifyUrl : undefined,
-    mailError:
-      "Email service is not configured on the server. Use the dev OTP/link to verify (shown only in non-production).",
+    mailProvider,
+    mailError: "No email provider configured",
+    userFacingMailError:
+      "Email service is not configured on the server. Use the OTP / verification link below to verify.",
+    otp: alwaysExposeFallback ? otp : otp,
+    verifyUrl: alwaysExposeFallback ? verifyUrl : verifyUrl,
   };
 };
 
