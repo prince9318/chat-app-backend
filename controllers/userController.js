@@ -367,6 +367,9 @@ export const updateProfile = async (req, res) => {
   }
 };
 
+const SPAM_HINT =
+  " If you don't see it within a minute, check your Spam, Promotions, or Junk folder, and try adding the sender to your contacts.";
+
 // Request password reset (email-based reset link)
 export const forgotPassword = async (req, res) => {
   try {
@@ -375,11 +378,14 @@ export const forgotPassword = async (req, res) => {
 
     const user = await User.findOne({ email });
 
-    // Always return success to avoid account enumeration
     if (!user) {
       return res.json({
         success: true,
-        message: "If an account exists for that email, a reset link was sent.",
+        message:
+          "If an account exists for that email, a reset link was sent. Check your Spam folder if you don't see it.",
+        emailSent: false,
+        usedFallback: false,
+        mailProvider: getMailProvider(),
       });
     }
 
@@ -390,7 +396,7 @@ export const forgotPassword = async (req, res) => {
       .digest("hex");
 
     user.resetPasswordTokenHash = resetTokenHash;
-    user.resetPasswordExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    user.resetPasswordExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
     await user.save();
 
     const frontendBase =
@@ -398,18 +404,29 @@ export const forgotPassword = async (req, res) => {
     const resetUrl = `${String(frontendBase).replace(/\/$/, "")}/reset-password?token=${resetToken}&email=${encodeURIComponent(
       email
     )}`;
-    const allowResetUrlFallback = canExposeResetUrl(frontendBase);
+
+    const allowResetUrlFallback =
+      canExposeResetUrl(frontendBase) ||
+      process.env.ALLOW_RESET_LINK_FALLBACK === "true";
+
+    const mailProvider = getMailProvider();
 
     if (canSendMail()) {
       try {
         await sendPasswordResetEmail({ to: email, resetUrl });
         return res.json({
           success: true,
-          message: "If an account exists for that email, a reset link was sent.",
+          message:
+            "If an account exists for that email, a reset link was sent." +
+            SPAM_HINT,
+          emailSent: true,
+          usedFallback: false,
+          mailProvider,
+          recipientHint: `Sent to ${email} via ${mailProvider}.`,
         });
       } catch (mailError) {
         console.error("Password reset email failed", {
-          provider: mailError?.mailProvider || getMailProvider(),
+          provider: mailError?.mailProvider || mailProvider,
           message: mailError?.message,
           code: mailError?.smtpCode || mailError?.code || null,
           command: mailError?.smtpCommand || null,
@@ -422,16 +439,22 @@ export const forgotPassword = async (req, res) => {
         if (allowResetUrlFallback) {
           return res.json({
             success: true,
-            message:
-              "Email service is unavailable, so a reset link is shown below for local testing.",
+            message: `Email service (${mailProvider}) returned an error, so a reset link is shown below.`,
+            emailSent: false,
+            usedFallback: true,
+            mailProvider,
+            mailError: mailError?.message || "Unknown email error",
             resetUrl,
           });
         }
 
         return res.json({
           success: false,
-          message:
-            "We could not send the reset email right now. Please try again in a moment.",
+          message: `We couldn't deliver the reset email right now (${mailProvider} error). Please try again in a moment, or use a different email provider.`,
+          emailSent: false,
+          usedFallback: false,
+          mailProvider,
+          mailError: mailError?.message || null,
         });
       }
     }
@@ -440,7 +463,10 @@ export const forgotPassword = async (req, res) => {
       return res.json({
         success: true,
         message:
-          "Password reset link generated (email provider not configured). Use the provided URL to reset.",
+          "Email provider is not configured on the server, so a reset link is shown below. Copy and open it to reset your password.",
+        emailSent: false,
+        usedFallback: true,
+        mailProvider: "none",
         resetUrl,
       });
     }
@@ -449,6 +475,9 @@ export const forgotPassword = async (req, res) => {
       success: false,
       message:
         "Password reset email is not configured on the server. Please contact support.",
+      emailSent: false,
+      usedFallback: false,
+      mailProvider: "none",
     });
   } catch (error) {
     console.log(error.message);
