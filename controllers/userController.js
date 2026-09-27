@@ -9,6 +9,10 @@ import {
   sendPasswordResetEmail,
   sendVerificationEmail,
 } from "../lib/mailer.js";
+import {
+  broadcastNewUserRegistered,
+  broadcastUserUpdated,
+} from "../lib/socketIO.js";
 
 const isLocalUrl = (value = "") =>
   /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(String(value).trim());
@@ -140,6 +144,8 @@ export const signup = async (req, res) => {
       emailVerified: false,
     });
 
+    broadcastNewUserRegistered(newUser);
+
     const frontendBase =
       process.env.FRONTEND_URL || process.env.OAUTH_SUCCESS_REDIRECT || "";
     const verificationResult = await sendVerificationToUser({
@@ -152,6 +158,16 @@ export const signup = async (req, res) => {
       message: "Account created. Please verify your email.",
       requiresVerification: true,
       email: newUser.email,
+      userData: {
+        _id: newUser._id,
+        email: newUser.email,
+        fullName: newUser.fullName,
+        profilePic: newUser.profilePic,
+        bio: newUser.bio,
+        authProvider: newUser.authProvider,
+        emailVerified: newUser.emailVerified,
+        createdAt: newUser.createdAt,
+      },
       ...verificationResult,
     });
   } catch (error) {
@@ -372,6 +388,7 @@ export const updateProfile = async (req, res) => {
         { new: true }
       );
     }
+    if (updatedUser) broadcastUserUpdated(updatedUser);
     res.json({ success: true, user: updatedUser });
   } catch (error) {
     console.log(error.message);

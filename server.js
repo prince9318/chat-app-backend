@@ -8,6 +8,7 @@ import oauthRouter from "./routes/oauthRoutes.js";
 import messageRouter from "./routes/messageRoutes.js";
 import { Server } from "socket.io";
 import path from "path";
+import { setIO } from "./lib/socketIO.js";
 
 // Create Express app and HTTP server
 const app = express();
@@ -25,6 +26,9 @@ export const io = new Server(server, {
     credentials: true,
   },
 });
+
+// Register global io instance so controllers can broadcast events
+setIO(io);
 
 // Store online users
 export const userSocketMap = {}; // { userId: socketId }
