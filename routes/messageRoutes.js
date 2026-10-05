@@ -12,7 +12,7 @@ import {
 import Message from "../models/Message.js";
 import { uploadAudio } from "../middlewares/uploadAudio.js";
 import { uploadAttachment } from "../middlewares/uploadAttachment.js";
-import { io } from "../server.js";
+import { io, userSocketMap } from "../server.js";
 
 const messageRouter = express.Router();
 
@@ -53,11 +53,19 @@ messageRouter.post(
       await newMessage.save();
 
       // ✅ emit real-time event to receiver
-      io.to(receiverId.toString()).emit("newMessage", newMessage);
+      const targetUserId = receiverId.toString();
+      const receiverSocketId = userSocketMap?.[targetUserId];
+      if (receiverSocketId && io) {
+        io.to(receiverSocketId).emit("newMessage", newMessage);
+      }
+      if (io) {
+        io.to(targetUserId).emit("newMessage", newMessage);
+      }
 
       res.json({
         success: true,
         message: "Audio sent successfully",
+        newMessage,
         data: newMessage,
       });
     } catch (error) {

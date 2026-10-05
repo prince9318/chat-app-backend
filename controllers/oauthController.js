@@ -195,10 +195,12 @@ export const githubCallback = async (req, res) => {
       const emailsRes = await fetch("https://api.github.com/user/emails", {
         headers,
       });
-      const emails = await emailsRes.json();
-      if (Array.isArray(emails)) {
-        const primary = emails.find((e) => e.primary && e.verified);
-        email = primary?.email || emails.find((e) => e.verified)?.email;
+      if (emailsRes.ok) {
+        const emails = await emailsRes.json();
+        if (Array.isArray(emails)) {
+          const primary = emails.find((e) => e.primary && e.verified);
+          email = primary?.email || emails.find((e) => e.verified)?.email;
+        }
       }
     }
 

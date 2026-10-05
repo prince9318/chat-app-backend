@@ -1,4 +1,4 @@
-import { generateToken } from "../lib/utils.js";
+import { generateToken, setAuthCookie } from "../lib/utils.js";
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import cloudinary from "../lib/cloudinary.js";
@@ -283,6 +283,7 @@ export const verifyEmail = async (req, res) => {
     await user.save();
 
     const authToken = generateToken(user._id);
+    setAuthCookie(res, authToken);
 
     res.json({
       success: true,
@@ -353,6 +354,7 @@ export const login = async (req, res) => {
     }
 
     const token = generateToken(userData._id);
+    setAuthCookie(res, token);
 
     res.json({ success: true, userData, token, message: "Login successful" });
   } catch (error) {
