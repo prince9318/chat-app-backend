@@ -142,6 +142,7 @@ export const getMessages = async (req, res) => {
         { senderId: myId, receiverId: selectedUserId },
         { senderId: selectedUserId, receiverId: myId },
       ],
+      deletedFor: { $ne: myId },
     }).sort({ createdAt: 1 });
 
     const unseenMessages = await Message.find({
